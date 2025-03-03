@@ -1,7 +1,5 @@
-[basic]
 update_time = 1000
 
-[cloudmusic]
 cloudmusic_lyric_address_offset_list = [0x01a58480, 0x120, 0x8]
 cloudmusic_play_time_offset = 0x1a07f70
 cloudmusic_play_end_time_offset = 0x1a58228
