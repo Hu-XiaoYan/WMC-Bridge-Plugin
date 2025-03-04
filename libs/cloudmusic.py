@@ -20,4 +20,4 @@ def get_player_time(now_time_address, end_time_address):
         return ctypes.cast(buffer, ctypes.POINTER(ctypes.c_double)).contents.value
     now_time = read_memory(now_time_address)
     end_time = read_memory(end_time_address)
-    return [now_time, end_time]
+    return [int(now_time), int(end_time)]
