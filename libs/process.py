@@ -38,3 +38,5 @@ def get_process_info(file_name):
                     return pid, module_handle
         except:
             pass
+    return None
+    #if can't read baseaddress...

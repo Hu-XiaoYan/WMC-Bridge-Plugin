@@ -38,7 +38,7 @@ def calc_offset_address(address, class_name):
     CloseHandle(process_handle)
     return target_address.value
 
-def get_offect_address(base_address, offset_list, class_name):
+def get_offset_address(base_address, offset_list, class_name):
     temp = None
     for offset in offset_list:
         try:
@@ -66,12 +66,12 @@ def get_mem_info(address, class_name, buf_size, decode_type):
     ctypes.windll.kernel32.ReadProcessMemory(int(process_handle), ctypes.c_void_p(address), buffer, buf_size, ctypes.byref(bytes_read))
     if bytes_read.value == 0:
         raise Exception
-    splited_raw_data = buffer.raw[:bytes_read.value].split(b"\x00\x00")[0]
-    if len(splited_raw_data) % 2 == 1:
-        splited_raw_data += b"\x00"
-    if last_data != splited_raw_data:
-        last_data = splited_raw_data
+    split_raw_data = buffer.raw[:bytes_read.value].split(b"\x00\x00")[0]
+    if len(split_raw_data) % 2 == 1:
+        split_raw_data += b"\x00"
+    if last_data != split_raw_data:
+        last_data = split_raw_data
         try:
-            return splited_raw_data.decode(decode_type)
+            return split_raw_data.decode(decode_type)
         except UnicodeDecodeError:
             raise Exception

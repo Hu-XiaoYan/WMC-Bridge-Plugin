@@ -5,7 +5,7 @@ import asyncio
 from multiprocessing import Process
 from PIL import Image
 
-from.cloudmusic import get_player_time, get_offect_address, get_mem_info
+from.cloudmusic import get_player_time, get_offset_address, get_mem_info
 from .process import detect_process, get_process_info, get_window_titles_by_pid
 music_platform_dict = {"网易云音乐": ["cloudmusic.exe", "cloudmusic.dll"]}
 
@@ -30,9 +30,10 @@ def start_watchdog(stop_event, watchdog_queue, player_platform):
     return p
 
 def listener_task(stop_event, listener_queue, base_addr, now_play_addr
-, end_play_addr, song_lyric_offset, song_id_offect):
+, end_play_addr, song_lyric_offset, song_id_offset):
     last_played_song = None
     last_song_id = None
+    image_data = None
     while not stop_event.is_set():
         try:
             temp_window_title = get_window_titles_by_pid(base_addr[0])
@@ -45,58 +46,55 @@ def listener_task(stop_event, listener_queue, base_addr, now_play_addr
             song_name = "获取歌名失败"
             song_artist = "获取艺术家失败"
         play_time_list = get_player_time(base_addr[1] + now_play_addr, base_addr[1] + end_play_addr)
-        song_id_addr = get_offect_address(base_addr[1], song_id_offect, "OrpheusBrowserHost")
+        song_id_addr = get_offset_address(base_addr[1], song_id_offset, "OrpheusBrowserHost")
         song_id = get_mem_info(song_id_addr, "OrpheusBrowserHost", 20, "utf-8").split("_")[0]
-        song_lryic_addr = get_offect_address(base_addr[1], song_lyric_offset, "DesktopLyrics")
-        song_lryic = get_mem_info(song_lryic_addr, "DesktopLyrics", 200, "utf-16-le")
+        song_lyric_addr = get_offset_address(base_addr[1], song_lyric_offset, "DesktopLyrics")
+        song_lyric = get_mem_info(song_lyric_addr, "DesktopLyrics", 200, "utf-16-le")
         song_changed = (song_name != last_played_song)
         if song_changed:
             if not os.path.exists("./cache"):
                 os.makedirs("./cache")
             while last_song_id == song_id:
                 song_id = get_mem_info(song_id_addr, "OrpheusBrowserHost", 20, "utf-8").split("_")[0]
-            img_data =  start_download_cover(song_id)
-            if img_data == None:
-                cover_ready = False
+            #force flash song_id make sure song_id is newest
+            download_stat =  start_download_cover(song_id)
+            if download_stat == "cached_cover" or download_stat == "dl_ok":
+                cover_stat = True
             else:
-                cover_ready = True
+                cover_stat = False
         last_played_song = song_name
         last_song_id = song_id
-        listener_queue.put({"cover_status": cover_ready, "song_name": song_name, "song_artist": song_artist,
+        listener_queue.put({"status":song_changed, "song_name": song_name, "song_artist": song_artist,
 "play_progress":[format_time(play_time_list[0]), format_time(play_time_list[1])],
-"original_progress": [format_original_time(play_time_list[0]), format_original_time(play_time_list[1])],
-"lryic": song_lryic, "cover_img": img_data})
+"original_progress": [play_time_list[0], play_time_list[1]],
+"lyric": song_lyric, "cover_ready": cover_stat, "song_id": song_id})
         time.sleep(0.5)
 
 async def download_task(song_id):
-    if os.path.exists(f"./cache/{song_id}.jpg"):
-        return "file_exists"
-    elif not os.path.exists(f"./cache/{song_id}.jpg"):
-        song_info = requests.get(f"https://music.163.com/api/song/detail?ids=[{song_id}]")
-        song_info_dict = song_info.json()
-        song_cover_url = song_info_dict["songs"][0]["album"]["picUrl"] + "?param=180y180"
-        img_data = requests.get(song_cover_url).content
-        with open(f"./cache/{song_id}.jpg", "wb") as f:
-            f.write(img_data)
-        return "dl_ok"
+    song_info = requests.get(f"https://music.163.com/api/song/detail?ids=[{song_id}]")
+    song_info_dict = song_info.json()
+    song_cover_url = song_info_dict["songs"][0]["album"]["picUrl"] + "?param=180y180"
+    img_data = requests.get(song_cover_url).content
+    with open(f"./cache/{song_id}.jpg", "wb") as f:
+        f.write(img_data)
 
 def start_download_cover(song_id):
-    if asyncio.run(download_task(song_id)) == "file_exists":
-        return Image.open(f"./cache/{song_id}.jpg")
-    elif asyncio.run(download_task(song_id)) == "dl_ok":
-        return Image.open(f"./cache/{song_id}.jpg")
+    file_path = f"./cache/{song_id}.jpg"
+    if os.path.exists(file_path):
+        return "cached_cover"
     else:
-        return None
+        try:
+            asyncio.run(download_task(song_id))
+        except:
+            return "dl_error"
+        return "dl_ok"
 
 def format_time(time):
     return f"{time//60%60:02d}:{time%60:02d}"
 
-def format_original_time(time):
-    return [int(f"{time//60%60:02d}"), int(f"{time%60:02d}")]
-
 def start_listener(stop_event, listener_queue, base_addr, now_play_addr, end_play_addr,
-song_lyric_offset, song_id_offect):
+song_lyric_offset, song_id_offset):
     p = Process(target = listener_task, args = (stop_event, listener_queue, base_addr, now_play_addr, end_play_addr, 
-song_lyric_offset, song_id_offect))
+song_lyric_offset, song_id_offset))
     p.start()
     return p
