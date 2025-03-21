@@ -173,4 +173,5 @@ cython_debug/
 # Custom File Path
 test/
 cache/
+data/
 .vscode/

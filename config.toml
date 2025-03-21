@@ -1,6 +1,5 @@
-update_time = 1000
-
-cloudmusic_lyric_address_offset_list = [0x01a5d4c0, 0x120, 0x8]
+#网易云播放时间偏移
 cloudmusic_play_time_offset = 0x1a0cf70
 cloudmusic_play_end_time_offset = 0x1a5d268
+#网易云歌曲ID偏移
 cloudmusic_song_id_offset = [0x01a5c790, 0x10, 0x8, 0x10, 0x68]
