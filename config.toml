@@ -1,5 +1,8 @@
+[cloudmusic]
+process_filename = ["cloudmusic.exe", "cloudmusic.dll"]
+[cloudmusic.offset]
 #网易云播放时间偏移
-cloudmusic_play_time_offset = 0x1a0cf70
-cloudmusic_play_end_time_offset = 0x1a5d268
+position = 0x1be2300
+end = 0x1c3ccd8
 #网易云歌曲ID偏移
-cloudmusic_song_id_offset = [0x01a5c790, 0x10, 0x8, 0x10, 0x68]
+song_id = [0x01c3c030, 0x10, 0x8, 0x10, 0x68]

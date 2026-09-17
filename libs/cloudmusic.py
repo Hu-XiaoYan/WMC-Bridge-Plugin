@@ -1,7 +1,5 @@
 import ctypes
 import logging
-from .logger import setup_colored_log
-setup_colored_log()
 
 from win32con import PROCESS_ALL_ACCESS
 from win32gui import FindWindow
