@@ -1,12 +1,12 @@
 import logging
 import os
 
-from . import cloudmusic, lyric, mem
+from . import cloudmusic, lyric, mem, paths
 from .watchdog import current_player_title
 
 CHECK_INTERVAL = 0.25     #和 legacy 一样 250ms 一轮
 PLAY_TOLERANCE = 0.6      #判定"在播"的容差(占间隔的比例)
-OUTPUT_FILE = "./data/lyric.txt"
+PLATFORM = "netease"
 
 def format_time(seconds):
     seconds = int(seconds)
@@ -36,9 +36,8 @@ def write_output(song_name, song_artist, position, duration, normal_lyric, trans
     #Tuna 读的就是这个文件, 格式和 legacy 保持一致
     content = (f"正在播放:{song_name}-{song_artist}  {format_time(position)}:{format_time(duration)}\n"
 f"{normal_lyric or ''}\n{trans_lyric or ''}")
-    if not os.path.exists("./data"):
-        os.makedirs("./data")
-    with open(OUTPUT_FILE, "w", encoding = "UTF-8") as f:
+    paths.ensure(PLATFORM)
+    with open(paths.output_path(PLATFORM), "w", encoding = "UTF-8") as f:
         f.writelines(content)
 
 def is_playing(raw_position, last_position):
@@ -70,7 +69,7 @@ def listener_task(stop_event, listener_queue, pid):
         last_position = None
         song_id = None
         duration = 0
-        cover_ready = False
+        cover_path = None
         normal_lines = trans_lines = None
         normal_times = trans_times = None
         normal_cursor = [0]
@@ -93,7 +92,7 @@ def listener_task(stop_event, listener_queue, pid):
                 last_title = title
                 song_id = None
                 duration = 0
-                cover_ready = False
+                cover_path = None
                 normal_lines = trans_lines = None
                 normal_times = trans_times = None
                 normal_cursor = [0]
@@ -108,7 +107,7 @@ f"({detail.get('name') if detail else '接口没返回'}), 跳过")
                             continue
                         song_id = candidate["id"]
                         duration = (detail.get("duration") or candidate["duration"]) / 1000
-                        cover_ready = cloudmusic.start_download_cover(song_id, detail.get("cover_url"))
+                        cover_path = cloudmusic.start_download_cover(song_id, detail.get("cover_url"))
                         normal_lrc, trans_lrc = cloudmusic.get_lyric(song_id)
                         if normal_lrc:
                             normal_lines, normal_times = lyric.parse_lrc(normal_lrc)
@@ -116,7 +115,7 @@ f"({detail.get('name') if detail else '接口没返回'}), 跳过")
                             trans_lines, trans_times = lyric.parse_lrc(trans_lrc)
                         break
                     if song_id is None:
-                        logging.warning(f"没能确认 {song_name} 的歌曲ID, 这一首先不取歌词和封面")
+                        logging.warning(f"没能确认 {song_name} 的歌曲ID, 请尝试切歌来重新获取歌曲ID")
 
             normal_lyric = lyric.find_current_lyric(normal_lines, normal_times, position,
 normal_cursor) if normal_lines else None
@@ -132,7 +131,8 @@ trans_cursor) if trans_lines else None
 "song_artist": song_artist,
 "play_progress": [format_time(position), format_time(duration)],
 "progress_seconds": [position, duration], "playing": playing,
-"cover_ready": cover_ready, "song_id": song_id,
+"cover_ready": cover_path is not None, "cover_path": cover_path,
+"song_id": song_id,
 "lyric": normal_lyric, "trans_lyric": trans_lyric})
     finally:
         mem.close_player(handle)

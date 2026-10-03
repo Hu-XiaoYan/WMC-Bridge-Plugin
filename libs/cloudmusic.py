@@ -4,15 +4,16 @@ import os
 
 import requests
 
+from . import paths
+
 LYRIC_URL = "https://music.163.com/api/song/lyric?os=pc&id={}&lv=-1&tv=-1"
 DETAIL_URL = "https://music.163.com/api/song/detail?ids=[{}]"
-COVER_DIR = "./data/pic"
-LYRIC_DIR = "./data/lyric"
+PLATFORM = "netease"
 
 def get_lyric(song_id):
     #先读本地缓存, 没有再走接口; 返回 (原歌词, 翻译歌词), 都没有就是 (None, None)
-    normal_path = f"{LYRIC_DIR}/{song_id}_normal.txt"
-    trans_path = f"{LYRIC_DIR}/{song_id}_trans.txt"
+    normal_path = paths.lyric_path(PLATFORM, song_id, "normal")
+    trans_path = paths.lyric_path(PLATFORM, song_id, "trans")
     if os.path.exists(normal_path):
         with open(normal_path, "r", encoding = "utf-8") as f:
             normal_lyric = f.read()
@@ -34,7 +35,7 @@ def get_lyric(song_id):
     except (KeyError, ValueError):
         logging.debug(f"{song_id} 无歌词/翻译或接口返回异常")
         return None, None
-    os.makedirs(LYRIC_DIR, exist_ok = True)
+    paths.ensure(PLATFORM)
     with open(normal_path, "w", encoding = "utf-8") as f:
         f.writelines(normal_lyric)
     with open(trans_path, "w", encoding = "utf-8") as f:
@@ -59,22 +60,23 @@ def get_song_detail(song_id):
 
 async def download_cover_cloudmusic(song_id, cover_url):
     img_data = requests.get(f"{cover_url}?param=500y500", timeout = 10).content
-    with open(f"{COVER_DIR}/{song_id}.jpg", "wb") as f:
+    with open(paths.cover_path(PLATFORM, song_id), "wb") as f:
         f.write(img_data)
 
 def start_download_cover(song_id, cover_url):
-    #返回 True/False, 表示界面上能不能拿到封面
-    if os.path.exists(f"{COVER_DIR}/{song_id}.jpg"):
+    #返回封面文件路径, 失败就是 None
+    path = paths.cover_path(PLATFORM, song_id)
+    if os.path.exists(path):
         logging.debug(f"{song_id} 封面已缓存")
-        return True
+        return path
     if not cover_url:
         logging.error(f"{song_id} 没有封面地址")
-        return False
-    os.makedirs(COVER_DIR, exist_ok = True)
+        return None
+    paths.ensure(PLATFORM)
     try:
         asyncio.run(download_cover_cloudmusic(song_id, cover_url))
     except Exception as err:
         logging.error(f"下载 {song_id} 封面失败! {err}")
-        return False
+        return None
     logging.debug(f"{song_id} 封面下载完毕")
-    return True
+    return path

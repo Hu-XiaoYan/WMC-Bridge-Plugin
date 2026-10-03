@@ -11,7 +11,6 @@ WNDENUMPROC = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
 user32.EnumWindows.argtypes = [WNDENUMPROC, wt.LPARAM]
 
 #候选播放器窗口: (窗口类名, 标题关键字)  标题关键字为 None 表示不校验标题
-#网易云 3.0+ = CEF 外壳; 标题关键字留空表示不校验
 PLAYER_WINDOWS = [("OrpheusBrowserHost", None)]
 
 def enum_top_windows():
@@ -45,15 +44,41 @@ def get_window_title(window_handle):
     user32.GetWindowTextW(window_handle, title, 512)
     return title.value
 
+kernel32 = ctypes.WinDLL("kernel32", use_last_error = True)
+TH32CS_SNAPPROCESS = 0x00000002
+
+class PROCESSENTRY32W(ctypes.Structure):
+    _fields_ = [("dwSize", wt.DWORD), ("cntUsage", wt.DWORD), ("th32ProcessID", wt.DWORD),
+                ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)), ("th32ModuleID", wt.DWORD),
+                ("cntThreads", wt.DWORD), ("th32ParentProcessID", wt.DWORD),
+                ("pcPriClassBase", ctypes.c_long), ("dwFlags", wt.DWORD),
+                ("szExeFile", ctypes.c_wchar * 260)]
+
+def list_process_pids(name_keyword):
+    #用 Toolhelp 枚举进程(沙箱里 Get-Process 看不到的它也能看到)
+    kernel32.CreateToolhelp32Snapshot.restype = wt.HANDLE
+    snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+    entry = PROCESSENTRY32W()
+    entry.dwSize = ctypes.sizeof(PROCESSENTRY32W)
+    pids = []
+    ok = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+    while ok:
+        if name_keyword.lower() in entry.szExeFile.lower():
+            pids.append(entry.th32ProcessID)
+        ok = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+    kernel32.CloseHandle(snapshot)
+    return pids
+
 def current_player_title(matchers = PLAYER_WINDOWS):
     #当前播放器的窗口标题(也就是"歌名 - 艺术家"), 拿不到就是空串
     window_handle, pid, matched_class = find_player_window(matchers)
     return get_window_title(window_handle) if window_handle else ""
 
-def watchdog_task(watchdog_queue, platform, matchers = PLAYER_WINDOWS):
+def watchdog_task(watchdog_queue, platform, matchers = PLAYER_WINDOWS, stop_event = None):
+    #stop_event 传了就能停(切换平台时要重启 watchdog)
     prev_status = None
     prev_pid = None
-    while True:
+    while stop_event is None or not stop_event.is_set():
         window_handle, pid, matched_class = find_player_window(matchers)
         current_status = window_handle is not None
         #状态或pid变了才上报, 避免刷队列
